@@ -1,2 +1,2 @@
 # Parallel-Tutorials
-Auto-tested tutorials covering the basics of parallel programming and MPI
+Checkout the branch of each tutorial and complete the steps outlined within the README.
