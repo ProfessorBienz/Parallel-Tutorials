@@ -1,0 +1,12 @@
+{
+  "name": "C MPI Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "settings": {},
+  "extensions": [
+    "ms-vscode.cpptools"
+  ],
+  "postCreateCommand": "./compile.sh || true",
+  "remoteUser": "root"
+}
