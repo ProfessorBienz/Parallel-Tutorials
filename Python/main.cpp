@@ -12,6 +12,9 @@ void initialize()
     
     PyRun_SimpleString("sys.path.append(\"" PY_SITE_PACKAGES "\")");
     PyRun_SimpleString("sys.path.append(\"" PY_MODULE_PATH "\")");
+
+    
+    
 }
 
 void finalize()
@@ -23,8 +26,6 @@ void finalize()
 // Return 0
 int tutorial_main(int argc, char* argv[])
 {
-    //MPI_Init(&argc, &argv);
-    
     int num_procs;
     MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
 
@@ -51,6 +52,8 @@ int tutorial_main(int argc, char* argv[])
 
             PyObject *sysModules = PyImport_GetModuleDict();
             PyObject *mpi4pyModule = PyDict_GetItemString(sysModules, "mpi4py");
+            PyRun_SimpleString("import sys; sys.stdout.flush()");
+            
             
             // Only pass MPI_Init test if loaded mpi4py module
             if (mpi4pyModule != NULL)
