@@ -7,7 +7,10 @@ git submodule update --init --remote
 ## Make build folder and compile code
 mkdir build
 cd build
-cmake -DUSE_PY=ON ..
-#cmake ..
+
+## If you want to use Python, switch which cmake statement is commented below
+cmake ..
+#cmake -DUSE_PY=ON ..
+
 make -j 4
 
