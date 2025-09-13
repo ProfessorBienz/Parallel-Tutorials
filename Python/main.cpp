@@ -22,13 +22,133 @@ void finalize()
     Py_Finalize();
 }
 
+double generate_random()
+{
+    PyObject *pName, *pModule, *pFunc;
+    PyObject *pValue;
+
+    double result = 0.0;
+
+    // Initialize Python Interpreter
+    initialize();
+    atexit(finalize);
+
+    // Find file
+    pName = PyUnicode_DecodeFSDefault("main");
+    pModule = PyImport_Import(pName);
+    Py_DECREF(pName);
+
+    if (pModule != NULL) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "generate_random");
+        if (pFunc && PyCallable_Check(pFunc)) {
+            PyObject *pValue = PyObject_CallObject(pFunc, nullptr);
+            if (pValue != NULL) {
+                result = PyFloat_AsDouble(pValue);
+                Py_DECREF(pValue);
+            } else {
+                PyErr_Print();
+            }
+        } else {
+            PyErr_Print();
+        }
+        Py_XDECREF(pFunc);
+        Py_DECREF(pModule);
+    } else {
+        PyErr_Print();
+    }
+
+    Py_Finalize();
+    return result;
+}
+
+void generate_random_array(int N, double* arr)
+{
+    PyObject *pName, *pModule, *pFunc;
+    PyObject *pValue;
+
+    // Initialize Python Interpreter
+    initialize();
+    atexit(finalize);
+
+    // Find file
+    pName = PyUnicode_DecodeFSDefault("main");
+    pModule = PyImport_Import(pName);
+    Py_DECREF(pName);
+
+    if (pModule != NULL) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "generate_random_array");
+        if (pFunc && PyCallable_Check(pFunc)) {
+            PyObject *pArgs = PyTuple_Pack(1, PyLong_FromLong(N));
+            PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
+            Py_DECREF(pArgs);
+
+            if (pValue && PyList_Check(pValue)) {
+                Py_ssize_t len = PyList_Size(pValue);
+                for (Py_ssize_t i = 0; i < len && i < N; i++) {
+                    arr[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
+                }
+                Py_DECREF(pValue);
+            } else {
+                PyErr_Print();
+            }
+        } else {
+            PyErr_Print();
+        }
+        Py_XDECREF(pFunc);
+        Py_DECREF(pModule);
+    } else {
+        PyErr_Print();
+    }
+
+    Py_Finalize();
+}
+
+double time_random_array_generation(int N, double* arr)
+{
+    double elapsed = 0.0;
+
+    PyObject *pName, *pModule, *pFunc;
+    PyObject *pValue;
+
+    // Initialize Python Interpreter
+    initialize();
+    atexit(finalize);
+
+    // Find file
+    pName = PyUnicode_DecodeFSDefault("main");
+    pModule = PyImport_Import(pName);
+    Py_DECREF(pName);
+
+    if (pModule != NULL) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "time_random_array_generation");
+        if (pFunc && PyCallable_Check(pFunc)) {
+            PyObject *pArgs = PyTuple_Pack(1, PyLong_FromLong(N));
+            PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
+            Py_DECREF(pArgs);
+
+            if (pValue != NULL) {
+                elapsed = PyFloat_AsDouble(pValue);
+                Py_DECREF(pValue);
+            } else {
+                PyErr_Print();
+            }
+        } else {
+            PyErr_Print();
+        }
+        Py_XDECREF(pFunc);
+        Py_DECREF(pModule);
+    } else {
+        PyErr_Print();
+    }
+
+    Py_Finalize();
+    return elapsed;
+}
+
 
 // Return 0
 int tutorial_main(int argc, char* argv[])
 {
-    int num_procs;
-    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-
     PyObject *pName, *pModule, *pFunc;
     PyObject *pValue;
 
