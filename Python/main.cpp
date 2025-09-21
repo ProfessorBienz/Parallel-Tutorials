@@ -1,20 +1,16 @@
-// https://docs.python.org/3/extending/embedding.html
-
+// main.cpp
 #include "src.hpp"
 #include "mpi.h"
 #include <Python.h>
+#include <vector>
+#include <iostream>
 
 void initialize()
 {
     Py_Initialize();
-    
     PyRun_SimpleString("import sys, sysconfig, site");
-    
     PyRun_SimpleString("sys.path.append(\"" PY_SITE_PACKAGES "\")");
     PyRun_SimpleString("sys.path.append(\"" PY_MODULE_PATH "\")");
-
-    
-    
 }
 
 void finalize()
@@ -22,27 +18,22 @@ void finalize()
     Py_Finalize();
 }
 
-double generate_random()
+// --- Call Python send_recv_random ---
+double send_recv_random()
 {
-    PyObject *pName, *pModule, *pFunc;
-    PyObject *pValue;
-
-    double result = 0.0;
-
-    // Initialize Python Interpreter
     initialize();
     atexit(finalize);
 
-    // Find file
-    pName = PyUnicode_DecodeFSDefault("main");
-    pModule = PyImport_Import(pName);
+    double result = 0.0;
+    PyObject *pName = PyUnicode_DecodeFSDefault("main");
+    PyObject *pModule = PyImport_Import(pName);
     Py_DECREF(pName);
 
-    if (pModule != NULL) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "generate_random");
+    if (pModule != nullptr) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "send_recv_random");
         if (pFunc && PyCallable_Check(pFunc)) {
             PyObject *pValue = PyObject_CallObject(pFunc, nullptr);
-            if (pValue != NULL) {
+            if (pValue != nullptr) {
                 result = PyFloat_AsDouble(pValue);
                 Py_DECREF(pValue);
             } else {
@@ -61,32 +52,30 @@ double generate_random()
     return result;
 }
 
-void generate_random_array(int N, double* arr)
+void ping_pong_send_and_recv(int N, double* send_array, double* recv_array)
 {
-    PyObject *pName, *pModule, *pFunc;
-    PyObject *pValue;
-
-    // Initialize Python Interpreter
     initialize();
     atexit(finalize);
 
-    // Find file
-    pName = PyUnicode_DecodeFSDefault("main");
-    pModule = PyImport_Import(pName);
+    PyObject *pName = PyUnicode_DecodeFSDefault("main");
+    PyObject *pModule = PyImport_Import(pName);
     Py_DECREF(pName);
 
-    if (pModule != NULL) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "generate_random_array");
+    if (pModule) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "ping_pong_send_and_recv");
         if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pArgs = PyTuple_Pack(1, PyLong_FromLong(N));
+            PyObject *pySend = PyList_New(N);
+            for (int i = 0; i < N; i++)
+                PyList_SetItem(pySend, i, PyFloat_FromDouble(send_array[i]));
+
+            PyObject *pArgs = PyTuple_Pack(2, PyLong_FromLong(N), pySend);
             PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
             Py_DECREF(pArgs);
 
             if (pValue && PyList_Check(pValue)) {
                 Py_ssize_t len = PyList_Size(pValue);
-                for (Py_ssize_t i = 0; i < len && i < N; i++) {
-                    arr[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
-                }
+                for (Py_ssize_t i = 0; i < len && i < N; i++)
+                    recv_array[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
                 Py_DECREF(pValue);
             } else {
                 PyErr_Print();
@@ -103,31 +92,31 @@ void generate_random_array(int N, double* arr)
     Py_Finalize();
 }
 
-double time_random_array_generation(int N, double* arr)
+// --- Part 3: ping-pong Sendrecv ---
+void ping_pong_sendrecv(int N, double* send_array, double* recv_array)
 {
-    double elapsed = 0.0;
-
-    PyObject *pName, *pModule, *pFunc;
-    PyObject *pValue;
-
-    // Initialize Python Interpreter
     initialize();
     atexit(finalize);
 
-    // Find file
-    pName = PyUnicode_DecodeFSDefault("main");
-    pModule = PyImport_Import(pName);
+    PyObject *pName = PyUnicode_DecodeFSDefault("main");
+    PyObject *pModule = PyImport_Import(pName);
     Py_DECREF(pName);
 
-    if (pModule != NULL) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "time_random_array_generation");
+    if (pModule) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "ping_pong_sendrecv");
         if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pArgs = PyTuple_Pack(1, PyLong_FromLong(N));
+            PyObject *pySend = PyList_New(N);
+            for (int i = 0; i < N; i++)
+                PyList_SetItem(pySend, i, PyFloat_FromDouble(send_array[i]));
+
+            PyObject *pArgs = PyTuple_Pack(2, PyLong_FromLong(N), pySend);
             PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
             Py_DECREF(pArgs);
 
-            if (pValue != NULL) {
-                elapsed = PyFloat_AsDouble(pValue);
+            if (pValue && PyList_Check(pValue)) {
+                Py_ssize_t len = PyList_Size(pValue);
+                for (Py_ssize_t i = 0; i < len && i < N; i++)
+                    recv_array[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
                 Py_DECREF(pValue);
             } else {
                 PyErr_Print();
@@ -142,74 +131,46 @@ double time_random_array_generation(int N, double* arr)
     }
 
     Py_Finalize();
-    return elapsed;
 }
 
 
-// Return 0
+// --- Tutorial main entrypoint ---
 int tutorial_main(int argc, char* argv[])
 {
-    PyObject *pName, *pModule, *pFunc;
-    PyObject *pValue;
-
-    // Initialize Python Interpreter
     initialize();
     atexit(finalize);
 
-    // Find file
-    pName = PyUnicode_DecodeFSDefault("main");
-    pModule = PyImport_Import(pName);
+    PyObject *pName = PyUnicode_DecodeFSDefault("main");
+    PyObject *pModule = PyImport_Import(pName);
     Py_DECREF(pName);
 
-    if (pModule != NULL)
-    {
-        // Find function within file
-        pFunc = PyObject_GetAttrString(pModule, "main");
-
-        if (pFunc && PyCallable_Check(pFunc))
-        {
-            pValue = PyObject_CallObject(pFunc, nullptr);
+    if (pModule != nullptr) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "main");
+        if (pFunc && PyCallable_Check(pFunc)) {
+            PyObject *pValue = PyObject_CallObject(pFunc, nullptr);
 
             PyObject *sysModules = PyImport_GetModuleDict();
             PyObject *mpi4pyModule = PyDict_GetItemString(sysModules, "mpi4py");
             PyRun_SimpleString("import sys; sys.stdout.flush()");
-            
-            
-            // Only pass MPI_Init test if loaded mpi4py module
-            if (mpi4pyModule != NULL)
+
+            if (mpi4pyModule != nullptr)
                 MPI_Init(&argc, &argv);
 
-            if (pValue != NULL)
-            {
+            if (pValue != nullptr) {
                 Py_DECREF(pValue);
-            }
-            else 
-            {
-                Py_DECREF(pFunc);
-                Py_DECREF(pModule);
+            } else {
                 PyErr_Print();
-                printf("Call Failed\n");
                 return -1;
             }
+        } else {
+            PyErr_Print();
         }
-        else
-        {
-            if (PyErr_Occurred())
-                PyErr_Print();
-            printf("Cannot find function %s\n", "main");
-        }
-
-        Py_DECREF(pFunc);
+        Py_XDECREF(pFunc);
         Py_DECREF(pModule);
-    }
-    else
-    {
+    } else {
         PyErr_Print();
-        printf("Failed to locate file %s\n", "main.py");
     }
 
     MPI_Finalize();
-
     return 0;
 }
-

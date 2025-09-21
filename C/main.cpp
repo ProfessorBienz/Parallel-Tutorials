@@ -1,35 +1,46 @@
 // This include is required for tutorial to pass tests
 #include "src.hpp"
 #include <time.h>
+#include <vector>
 
 
 // Tutorial Part 1
-double generate_random()
+double send_recv_random()
 {
-    double val = 0;
-
-    // Seed random number generator
+    // Rank 0 seeds random number generator
     
-    // Generate a random number
+    // Rank 0 gets a random number
 
-    return val;
+    // Rank 0 sends random number to Rank 1
+
+    // Both ranks return the same random number
 }
 
 // Tutorial Part 2
-// Generate an array of N random numbers across all processes
-// Each process will hold a portion of the array (N/np elements)
-void generate_random_array(int N, double*)
-{
-    // Seed random number generator
+// Perform a ping-pong with MPI_Send and MPI_Recv
+void ping_pong_send_and_recv(int N, double* send_array, double* recv_array)
+{    
+    // Fill send_array with unique random numbers
 
-    // Generate a list of random numbers
+    // Rank 0 sends send_array to Rank 1
+    // Rank 1 receives into its recv_array
+
+    // Rank 1 sends send_array to Rank 0
+    // Rank 0 recieves into its recv_array
+
 }
 
 // Tutorial Part 3
-// Return number of seconds it takes to generate random array
-double time_random_array_generation(int N, double*)
+// Perform a ping-pong with MPI_Sendrecv
+void ping_pong_sendrecv(int N, double* send_array, double* recv_array)
 {
-    // Time how long it takes to generate list of N random numbers
+    // Fill send_array with unique random numbers
+
+    // Rank 0 sends send_array to Rank 1
+    // Rank 1 receives into its recv_array
+
+    // Rank 1 sends send_array to Rank 0
+    // Rank 0 recieves into its recv_array
 
 }
 
@@ -38,9 +49,7 @@ int tutorial_main(int argc, char* argv[])
 {
     // 1. Initialize
     
-
-    // 2. Generate random number
-    
+    // 2. Call your methods
 
     // 3. Finalize
 

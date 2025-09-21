@@ -1,11 +1,11 @@
 
-def generate_random():
+def send_recv_random():
 
 
-def generate_random_array(N):
+def ping_pong_send_and_recv(N, send_array, recv_array, use_sendrecv=False):
 
 
-def time_random_array_generation(N):
+def ping_pong_sendrecv(N, send_array, recv_array, use_sendrecv=False):
 
 
 def main():
