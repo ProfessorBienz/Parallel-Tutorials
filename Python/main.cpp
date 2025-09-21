@@ -7,10 +7,12 @@
 
 void initialize()
 {
-    Py_Initialize();
-    PyRun_SimpleString("import sys, sysconfig, site");
-    PyRun_SimpleString("sys.path.append(\"" PY_SITE_PACKAGES "\")");
-    PyRun_SimpleString("sys.path.append(\"" PY_MODULE_PATH "\")");
+    if (!Py_IsInitialized()) {
+        Py_Initialize();
+        PyRun_SimpleString("import sys, sysconfig, site");
+        PyRun_SimpleString("sys.path.append(\"" PY_SITE_PACKAGES "\")");
+        PyRun_SimpleString("sys.path.append(\"" PY_MODULE_PATH "\")");
+    }
 }
 
 void finalize()
@@ -48,7 +50,6 @@ double send_recv_random()
         PyErr_Print();
     }
 
-    Py_Finalize();
     return result;
 }
 
@@ -89,7 +90,6 @@ void ping_pong_send_and_recv(int N, double* send_array, double* recv_array)
         PyErr_Print();
     }
 
-    Py_Finalize();
 }
 
 // --- Part 3: ping-pong Sendrecv ---
@@ -130,7 +130,6 @@ void ping_pong_sendrecv(int N, double* send_array, double* recv_array)
         PyErr_Print();
     }
 
-    Py_Finalize();
 }
 
 
