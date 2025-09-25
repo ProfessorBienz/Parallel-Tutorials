@@ -2,7 +2,6 @@
 #include "src.hpp"
 #include "mpi.h"
 #include <Python.h>
-#include <vector>
 #include <iostream>
 
 void initialize()
@@ -17,44 +16,33 @@ void initialize()
 
 void finalize()
 {
-    Py_Finalize();
+    if (Py_IsInitialized()) {
+        Py_Finalize();
+    }
 }
 
-// --- Call Python send_recv_random ---
-double send_recv_random()
-{
-    initialize();
-    atexit(finalize);
-
-    double result = 0.0;
-    PyObject *pName = PyUnicode_DecodeFSDefault("main");
-    PyObject *pModule = PyImport_Import(pName);
-    Py_DECREF(pName);
-
-    if (pModule != nullptr) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "send_recv_random");
-        if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pValue = PyObject_CallObject(pFunc, nullptr);
-            if (pValue != nullptr) {
-                result = PyFloat_AsDouble(pValue);
-                Py_DECREF(pValue);
-            } else {
-                PyErr_Print();
-            }
-        } else {
-            PyErr_Print();
-        }
-        Py_XDECREF(pFunc);
-        Py_DECREF(pModule);
-    } else {
-        PyErr_Print();
+// --- Utility: build args (send_array, N) ---
+PyObject* build_args(double* sendbuf, int N) {
+    PyObject *pySend = PyList_New(N);
+    for (int i = 0; i < N; i++) {
+        PyList_SetItem(pySend, i, PyFloat_FromDouble(sendbuf[i])); // steals ref
     }
 
-    return result;
+    PyObject *pyN = PyLong_FromLong(N);
+
+    PyObject *pArgs = PyTuple_New(2);
+    PyTuple_SetItem(pArgs, 0, pySend); // steals pySend
+    PyTuple_SetItem(pArgs, 1, pyN);    // steals pyN
+
+    return pArgs; // caller must DECREF
 }
 
-void ping_pong_send_and_recv(int N, double* send_array, double* recv_array)
+// --- Wrapper: allgather_simple ---
+void allgather_simple(double* sendbuf, double* recvbuf, int N)
 {
+    int num_procs;
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
     initialize();
     atexit(finalize);
 
@@ -63,20 +51,17 @@ void ping_pong_send_and_recv(int N, double* send_array, double* recv_array)
     Py_DECREF(pName);
 
     if (pModule) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "ping_pong_send_and_recv");
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "allgather_simple");
         if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pySend = PyList_New(N);
-            for (int i = 0; i < N; i++)
-                PyList_SetItem(pySend, i, PyFloat_FromDouble(send_array[i]));
-
-            PyObject *pArgs = PyTuple_Pack(2, PyLong_FromLong(N), pySend);
+            PyObject *pArgs = build_args(sendbuf, N);
             PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
             Py_DECREF(pArgs);
 
             if (pValue && PyList_Check(pValue)) {
                 Py_ssize_t len = PyList_Size(pValue);
-                for (Py_ssize_t i = 0; i < len && i < N; i++)
-                    recv_array[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
+                for (Py_ssize_t i = 0; i < len && i < N * num_procs; i++) {
+                    recvbuf[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
+                }
                 Py_DECREF(pValue);
             } else {
                 PyErr_Print();
@@ -89,12 +74,14 @@ void ping_pong_send_and_recv(int N, double* send_array, double* recv_array)
     } else {
         PyErr_Print();
     }
-
 }
 
-// --- Part 3: ping-pong Sendrecv ---
-void ping_pong_sendrecv(int N, double* send_array, double* recv_array)
+// --- Wrapper: allgather_pairwise ---
+void allgather_pairwise(double* sendbuf, double* recvbuf, int N)
 {
+    int num_procs;
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
     initialize();
     atexit(finalize);
 
@@ -103,20 +90,17 @@ void ping_pong_sendrecv(int N, double* send_array, double* recv_array)
     Py_DECREF(pName);
 
     if (pModule) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "ping_pong_sendrecv");
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "allgather_pairwise");
         if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pySend = PyList_New(N);
-            for (int i = 0; i < N; i++)
-                PyList_SetItem(pySend, i, PyFloat_FromDouble(send_array[i]));
-
-            PyObject *pArgs = PyTuple_Pack(2, PyLong_FromLong(N), pySend);
+            PyObject *pArgs = build_args(sendbuf, N);
             PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
             Py_DECREF(pArgs);
 
             if (pValue && PyList_Check(pValue)) {
                 Py_ssize_t len = PyList_Size(pValue);
-                for (Py_ssize_t i = 0; i < len && i < N; i++)
-                    recv_array[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
+                for (Py_ssize_t i = 0; i < len && i < N * num_procs; i++) {
+                    recvbuf[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
+                }
                 Py_DECREF(pValue);
             } else {
                 PyErr_Print();
@@ -129,11 +113,48 @@ void ping_pong_sendrecv(int N, double* send_array, double* recv_array)
     } else {
         PyErr_Print();
     }
-
 }
 
+// --- Wrapper: allgather_ring ---
+void allgather_ring(double* sendbuf, double* recvbuf, int N)
+{
+    int num_procs;
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
 
-// --- Tutorial main entrypoint ---
+    initialize();
+    atexit(finalize);
+
+    PyObject *pName = PyUnicode_DecodeFSDefault("main");
+    PyObject *pModule = PyImport_Import(pName);
+    Py_DECREF(pName);
+
+    if (pModule) {
+        PyObject *pFunc = PyObject_GetAttrString(pModule, "allgather_ring");
+        if (pFunc && PyCallable_Check(pFunc)) {
+            PyObject *pArgs = build_args(sendbuf, N);
+            PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
+            Py_DECREF(pArgs);
+
+            if (pValue && PyList_Check(pValue)) {
+                Py_ssize_t len = PyList_Size(pValue);
+                for (Py_ssize_t i = 0; i < len && i < N * num_procs; i++) {
+                    recvbuf[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
+                }
+                Py_DECREF(pValue);
+            } else {
+                PyErr_Print();
+            }
+        } else {
+            PyErr_Print();
+        }
+        Py_XDECREF(pFunc);
+        Py_DECREF(pModule);
+    } else {
+        PyErr_Print();
+    }
+}
+
+// --- Entry point ---
 int tutorial_main(int argc, char* argv[])
 {
     initialize();
@@ -173,3 +194,4 @@ int tutorial_main(int argc, char* argv[])
     MPI_Finalize();
     return 0;
 }
+
