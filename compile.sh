@@ -9,8 +9,8 @@ mkdir build
 cd build
 
 ## If you want to use Python, switch which cmake statement is commented below
-#cmake ..
-cmake -DUSE_PY=ON ..
+cmake ..
+#cmake -DUSE_PY=ON ..
 
 make -j 4
 

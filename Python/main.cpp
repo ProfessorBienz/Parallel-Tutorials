@@ -3,6 +3,10 @@
 #include "mpi.h"
 #include <Python.h>
 #include <iostream>
+#include <cstdlib>
+
+// Expect these to be provided via your build system (like before)
+// PY_SITE_PACKAGES and PY_MODULE_PATH are used to set sys.path.
 
 void initialize()
 {
@@ -21,24 +25,7 @@ void finalize()
     }
 }
 
-// --- Utility: build args (send_array, N) ---
-PyObject* build_args(double* sendbuf, int N) {
-    PyObject *pySend = PyList_New(N);
-    for (int i = 0; i < N; i++) {
-        PyList_SetItem(pySend, i, PyFloat_FromDouble(sendbuf[i])); // steals ref
-    }
-
-    PyObject *pyN = PyLong_FromLong(N);
-
-    PyObject *pArgs = PyTuple_New(2);
-    PyTuple_SetItem(pArgs, 0, pySend); // steals pySend
-    PyTuple_SetItem(pArgs, 1, pyN);    // steals pyN
-
-    return pArgs; // caller must DECREF
-}
-
-// --- Wrapper: allgather_simple ---
-void allgather_simple(double* sendbuf, double* recvbuf, int N)
+void transpose_call(const char* py_func_name, double* A, double* AT, int local_n, int global_n)
 {
     int num_procs;
     MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
@@ -51,17 +38,28 @@ void allgather_simple(double* sendbuf, double* recvbuf, int N)
     Py_DECREF(pName);
 
     if (pModule) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "allgather_simple");
+        PyObject *pFunc = PyObject_GetAttrString(pModule, py_func_name);
         if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pArgs = build_args(sendbuf, N);
+            int size = local_n * global_n;
+
+            PyObject* pyLocalN  = PyLong_FromLong(local_n);
+            PyObject* pyGlobalN = PyLong_FromLong(global_n);
+            PyObject* pyA = PyList_New(size);
+            for (long i = 0; i < size; ++i) {
+                PyObject* v = PyFloat_FromDouble(A[i]);
+                PyList_SetItem(pyA, i, v);
+            }
+
+            PyObject* pArgs = PyTuple_New(3);
+            PyTuple_SetItem(pArgs, 0, pyA);
+            PyTuple_SetItem(pArgs, 1, pyLocalN);
+            PyTuple_SetItem(pArgs, 2, pyGlobalN);
             PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
             Py_DECREF(pArgs);
 
             if (pValue && PyList_Check(pValue)) {
-                Py_ssize_t len = PyList_Size(pValue);
-                for (Py_ssize_t i = 0; i < len && i < N * num_procs; i++) {
-                    recvbuf[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
-                }
+                for (int i = 0; i < size; i++)
+                    AT[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
                 Py_DECREF(pValue);
             } else {
                 PyErr_Print();
@@ -76,85 +74,21 @@ void allgather_simple(double* sendbuf, double* recvbuf, int N)
     }
 }
 
-// --- Wrapper: allgather_pairwise ---
-void allgather_pairwise(double* sendbuf, double* recvbuf, int N)
+void transpose(double* A, double* AT, int local_n, int global_n)
 {
-    int num_procs;
-    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-
-    initialize();
-    atexit(finalize);
-
-    PyObject *pName = PyUnicode_DecodeFSDefault("main");
-    PyObject *pModule = PyImport_Import(pName);
-    Py_DECREF(pName);
-
-    if (pModule) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "allgather_pairwise");
-        if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pArgs = build_args(sendbuf, N);
-            PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
-            Py_DECREF(pArgs);
-
-            if (pValue && PyList_Check(pValue)) {
-                Py_ssize_t len = PyList_Size(pValue);
-                for (Py_ssize_t i = 0; i < len && i < N * num_procs; i++) {
-                    recvbuf[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
-                }
-                Py_DECREF(pValue);
-            } else {
-                PyErr_Print();
-            }
-        } else {
-            PyErr_Print();
-        }
-        Py_XDECREF(pFunc);
-        Py_DECREF(pModule);
-    } else {
-        PyErr_Print();
-    }
+    transpose_call("transpose", A, AT, local_n, global_n);
 }
 
-// --- Wrapper: allgather_ring ---
-void allgather_ring(double* sendbuf, double* recvbuf, int N)
+void transpose_datatype(double* A, double* AT, int local_n, int global_n)
 {
-    int num_procs;
-    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
-
-    initialize();
-    atexit(finalize);
-
-    PyObject *pName = PyUnicode_DecodeFSDefault("main");
-    PyObject *pModule = PyImport_Import(pName);
-    Py_DECREF(pName);
-
-    if (pModule) {
-        PyObject *pFunc = PyObject_GetAttrString(pModule, "allgather_ring");
-        if (pFunc && PyCallable_Check(pFunc)) {
-            PyObject *pArgs = build_args(sendbuf, N);
-            PyObject *pValue = PyObject_CallObject(pFunc, pArgs);
-            Py_DECREF(pArgs);
-
-            if (pValue && PyList_Check(pValue)) {
-                Py_ssize_t len = PyList_Size(pValue);
-                for (Py_ssize_t i = 0; i < len && i < N * num_procs; i++) {
-                    recvbuf[i] = PyFloat_AsDouble(PyList_GetItem(pValue, i));
-                }
-                Py_DECREF(pValue);
-            } else {
-                PyErr_Print();
-            }
-        } else {
-            PyErr_Print();
-        }
-        Py_XDECREF(pFunc);
-        Py_DECREF(pModule);
-    } else {
-        PyErr_Print();
-    }
+    transpose_call("transpose_datatype", A, AT, local_n, global_n);
 }
 
-// --- Entry point ---
+void transpose_alltoall(double* A, double* AT, int local_n, int global_n)
+{
+    transpose_call("transpose_alltoall", A, AT, local_n, global_n);
+}
+
 int tutorial_main(int argc, char* argv[])
 {
     initialize();
@@ -192,6 +126,7 @@ int tutorial_main(int argc, char* argv[])
     }
 
     MPI_Finalize();
+
     return 0;
 }
 
